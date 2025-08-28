@@ -6,6 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/hjson/hjson-go/v4"
 	"github.com/jitsucom/bulker/jitsubase/appbase"
 	"github.com/jitsucom/bulker/jitsubase/safego"
@@ -21,13 +29,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/utils/ptr"
-	"math"
-	"regexp"
-	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 const (
@@ -852,7 +853,7 @@ func (j *JobRunner) createPod(podName string, task TaskDescriptor, configuration
 				},
 				{
 					Name:            "sidecar",
-					ImagePullPolicy: v1.PullAlways,
+					ImagePullPolicy: v1.PullIfNotPresent,
 					Image:           j.config.SidecarImage,
 					Env:             sideCarEnvVar,
 					VolumeMounts:    volumeMounts,

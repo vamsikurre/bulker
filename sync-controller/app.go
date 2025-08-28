@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jitsucom/bulker/jitsubase/appbase"
 	"github.com/jitsucom/bulker/jitsubase/pg"
-	"net/http"
-	"time"
 )
 
 type Context struct {
@@ -29,10 +30,10 @@ func (a *Context) InitContext(settings *appbase.AppSettings) error {
 	if err != nil {
 		return fmt.Errorf("Unable to create postgres connection pool: %v\n", err)
 	}
-	//err = InitDBSchema(a.dbpool)
-	//if err != nil {
-	//	return err
-	//}
+	err = InitDBSchema(a.dbpool)
+	if err != nil {
+		return err
+	}
 	a.jobRunner, err = NewJobRunner(a)
 	if err != nil {
 		return err
