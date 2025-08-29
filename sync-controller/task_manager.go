@@ -1,7 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"strings"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jitsucom/bulker/jitsubase/appbase"
@@ -9,8 +14,6 @@ import (
 	"github.com/jitsucom/bulker/jitsubase/safego"
 	"github.com/jitsucom/bulker/jitsubase/utils"
 	"github.com/jitsucom/bulker/sync-sidecar/db"
-	"strings"
-	"time"
 
 	"net/http"
 )
@@ -42,7 +45,7 @@ func (t *TaskManager) SpecHandler(c *gin.Context) {
 		PackageVersion: version,
 		StartedAt:      startedAt.Format(time.RFC3339),
 	}
-
+	t.Infof("Read taskDescriptor: %+v", taskDescriptor)
 	taskStatus := t.jobRunner.CreateJob(taskDescriptor, nil)
 	if taskStatus.Status == StatusCreateFailed {
 		c.JSON(http.StatusOK, gin.H{"ok": false, "error": taskStatus.Error})
@@ -53,7 +56,16 @@ func (t *TaskManager) SpecHandler(c *gin.Context) {
 
 func (t *TaskManager) CheckHandler(c *gin.Context) {
 	taskConfig := TaskConfiguration{}
-	err := c.BindJSON(&taskConfig)
+	bodyBytes, errr := c.GetRawData()
+	if errr != nil {
+		t.Errorf("Failed to read request body: %v", errr)
+	} else {
+		t.Infof("Raw JSON body: %s", strings.ReplaceAll(string(bodyBytes), "\\", ""))
+	}
+
+	c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	err := jsonorder.NewDecoder(c.Request.Body).Decode(&taskConfig)
+	defer c.Request.Body.Close()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": err.Error()})
 		return
@@ -65,7 +77,7 @@ func (t *TaskManager) CheckHandler(c *gin.Context) {
 		StorageKey:     c.Query("storageKey"),
 		StartedAt:      time.Now().Format(time.RFC3339),
 	}
-
+	t.Infof("Read taskDescriptor: %+v", taskDescriptor)
 	taskStatus := t.jobRunner.CreateJob(taskDescriptor, &taskConfig)
 	if taskStatus.Status == StatusCreateFailed {
 		c.JSON(http.StatusOK, gin.H{"ok": false, "error": taskStatus.Error})
@@ -76,7 +88,16 @@ func (t *TaskManager) CheckHandler(c *gin.Context) {
 
 func (t *TaskManager) DiscoverHandler(c *gin.Context) {
 	taskConfig := TaskConfiguration{}
-	err := c.BindJSON(&taskConfig)
+	bodyBytes, errr := c.GetRawData()
+	if errr != nil {
+		t.Errorf("Failed to read request body: %v", errr)
+	} else {
+		t.Infof("Raw JSON body: %s", strings.ReplaceAll(string(bodyBytes), "\\", ""))
+	}
+
+	c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	err := jsonorder.NewDecoder(c.Request.Body).Decode(&taskConfig)
+	defer c.Request.Body.Close()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "error": err.Error()})
 		return
@@ -94,7 +115,7 @@ func (t *TaskManager) DiscoverHandler(c *gin.Context) {
 		FullSync:       c.Query("fullSync"),
 		StartedBy:      c.Query("startedBy"),
 	}
-
+	t.Infof("Read taskDescriptor: %+v", taskDescriptor)
 	taskStatus := t.jobRunner.CreateJob(taskDescriptor, &taskConfig)
 	if taskStatus.Status == StatusCreateFailed {
 		c.JSON(http.StatusOK, gin.H{"ok": false, "error": taskStatus.Error})
@@ -116,6 +137,14 @@ func (t *TaskManager) CancelHandler(c *gin.Context) {
 
 func (t *TaskManager) ReadHandler(c *gin.Context) {
 	taskConfig := TaskConfiguration{}
+	bodyBytes, errr := c.GetRawData()
+	if errr != nil {
+		t.Errorf("Failed to read request body: %v", errr)
+	} else {
+		t.Infof("Raw JSON body: %s", strings.ReplaceAll(string(bodyBytes), "\\", ""))
+	}
+
+	c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 	err := jsonorder.NewDecoder(c.Request.Body).Decode(&taskConfig)
 	defer c.Request.Body.Close()
 	if err != nil {
@@ -142,7 +171,7 @@ func (t *TaskManager) ReadHandler(c *gin.Context) {
 		StartedBy:       c.Query("startedBy"),
 		StartedAt:       time.Now().Format(time.RFC3339),
 	}
-
+	t.Infof("Read taskDescriptor: %+v", taskDescriptor)
 	taskStatus := t.jobRunner.CreateJob(taskDescriptor, &taskConfig)
 	if taskStatus.Status == StatusCreateFailed {
 		c.JSON(http.StatusOK, gin.H{"ok": false, "error": taskStatus.Error})
@@ -197,7 +226,8 @@ func (t *TaskManager) runReadTask(st *TaskStatus) {
 		t.jobRunner.runningSyncs.Delete(st.SyncID)
 		err = db.UpsertRunningTask(t.dbpool, st.SyncID, st.TaskID, st.Package, st.PackageVersion, st.StartedAtTime(), "FAILED", fmt.Sprintf("FAILED: Unable to initiate read task: %v", err), st.StartedBy)
 		if err != nil {
-			t.Errorf("Unable to update '%s' status: %v\n", st.TaskType, err)
+			// Print full error stack trace if available
+			t.Errorf("Unable to update '%s' status: %+v\n", st.TaskType, err)
 		}
 		return
 	} else if res.StatusCode != http.StatusOK {
@@ -265,7 +295,7 @@ func (t *TaskManager) listenTaskStatus() {
 				}
 			}
 			if err != nil {
-				t.Errorf("Unable to update '%s' status: %v\n", st.TaskType, err)
+				t.Errorf("Unable to update '%s' status: %v", st.TaskType, err)
 			}
 			if st.Status != StatusPending {
 				t.Infof("taskStatus: %+v\n", *st)

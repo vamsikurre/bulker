@@ -1,6 +1,6 @@
 FROM golang:1.24.4-bookworm AS build
 
-RUN apt-get update -y && apt-get install -y gcc libc6-dev
+RUN apt-get install -y gcc libc6-dev
 
 RUN mkdir /app
 WORKDIR /app
