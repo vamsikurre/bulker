@@ -232,7 +232,7 @@ services:
 
   syncctl:
     tty: true
-    image: jitsucom/syncctl:${DOCKER_TAG:-latest}
+    image: syncctlnew:1.0.1
     platform: linux/amd64
     restart: "on-failure"
     profiles: ['syncctl']
